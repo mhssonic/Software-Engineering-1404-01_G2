@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://unpkg.com/persian-datepicker@latest/dist/css/persian-datepicker.min.css">
     <!-- استایل اختصاصی این صفحه -->
     <link rel="stylesheet" href="{% static 'team10/styles/create-trip.css' %}">
+    <link rel="stylesheet" href="{% static 'team10/styles/beautiful-datepicker.css' %}">
+
 {% endblock %}
 
 {% block content %}
@@ -589,6 +591,14 @@
                 toolbox: {
                     calendarSwitch: { enabled: false }
                 },
+
+                onShow: function() {
+                    setTimeout(function() {
+                        $('.datepicker-plot-area')
+                            .addClass('t10-beautiful-calendar');
+                    }, 0);
+                },
+
                 timePicker: { enabled: false },
                 onSelect: function(unix) {
                     let jalaliStr = persianToEnglish($(this._targetInput).val());
