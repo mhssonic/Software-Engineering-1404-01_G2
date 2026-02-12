@@ -2,10 +2,12 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 
 import jdatetime
+from django.core.exceptions import PermissionDenied
 from django.db.utils import OperationalError
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.defaults import page_not_found, permission_denied
 
 from core.auth import api_login_required
 from .models import Trip, TripRequirements, PreferenceConstraint, TransferPlan
@@ -17,9 +19,23 @@ def team10_login_required(view_func):
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
+            if request.path.startswith("/team10/"):
+                raise PermissionDenied
             return redirect('/auth/')
         return view_func(request, *args, **kwargs)
     return _wrapped
+
+
+def team10_handler404(request, exception=None):
+    if request.path.startswith("/team10/"):
+        return render(request, "team10/404.html", status=404)
+    return page_not_found(request, exception)
+
+
+def team10_handler403(request, exception=None):
+    if request.path.startswith("/team10/"):
+        return render(request, "team10/404.html", status=403)
+    return permission_denied(request, exception)
 
 
 TEAM_NAME = "team10"

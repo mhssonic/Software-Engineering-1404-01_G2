@@ -20,6 +20,9 @@ from django.conf import settings
 from core.web_views import home
 from core.web_auth_views import login_page, signup_page, logout_page
 
+handler404 = "team10.views.team10_handler404"
+handler403 = "team10.views.team10_handler403"
+
 urlpatterns = [
     path("", home, name="home"),
 
