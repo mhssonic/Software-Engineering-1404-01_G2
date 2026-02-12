@@ -1,0 +1,72 @@
+/* فقط روی تقویم‌هایی که کلاس سفارشی دارند */
+.datepicker-plot-area.t10-beautiful-calendar {
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(14px);
+    border-radius: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+    border: none;
+    padding: 14px;
+    animation: fadeInCalendar 0.25s ease;
+}
+
+@keyframes fadeInCalendar {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* هدر */
+.t10-beautiful-calendar .datepicker-header {
+    background: linear-gradient(135deg, #0ea5e9, #22c55e);
+    border-radius: 14px;
+    padding: 10px;
+    color: white;
+    font-weight: 600;
+}
+
+/* فلش‌ها */
+.t10-beautiful-calendar .prev,
+.t10-beautiful-calendar .next {
+    color: white;
+    transition: transform 0.2s ease;
+}
+
+.t10-beautiful-calendar .prev:hover,
+.t10-beautiful-calendar .next:hover {
+    transform: scale(1.2);
+}
+
+/* روزها */
+.t10-beautiful-calendar .datepicker-day-view .table-days td span {
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    padding: 6px;
+}
+
+.t10-beautiful-calendar .datepicker-day-view .table-days td span:hover {
+    background: #e0f2fe;
+    color: #0284c7;
+    transform: scale(1.05);
+}
+
+.t10-beautiful-calendar td.selected span {
+    background: linear-gradient(135deg, #22c55e, #0ea5e9);
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+}
+
+.t10-beautiful-calendar td.today span {
+    border: 2px solid #22c55e;
+    font-weight: 600;
+}
+
+.t10-beautiful-calendar td.disabled span {
+    opacity: 0.3;
+}
