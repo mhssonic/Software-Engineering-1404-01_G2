@@ -109,6 +109,17 @@
     font-weight: bold;
 }
 
+.t10-inline-error {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: #ef4444;
+    display: none;
+}
+
+.t10-inline-error.is-visible {
+    display: block;
+}
+
 @media (max-width: 600px) {
     .form-row {
         flex-direction: column;

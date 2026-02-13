@@ -47,6 +47,7 @@
                         <i class="fas fa-calendar-alt t10-calendar-icon"></i>
                     </div>
                     <input type="hidden" name="start_date" id="start-date-gregorian">
+                    <small id="start-date-error" class="t10-inline-error" aria-live="polite"></small>
                 </div>
 
                 <div class="form-group">
@@ -56,6 +57,7 @@
                         <i class="fas fa-calendar-alt t10-calendar-icon"></i>
                     </div>
                     <input type="hidden" name="end_date" id="end-date-gregorian">
+                    <small id="end-date-error" class="t10-inline-error" aria-live="polite"></small>
                 </div>
             </div>
 
@@ -228,6 +230,99 @@
             return { year: gy, month: gm, day: gd };
         }
 
+        function pad2(value) {
+            return String(value).padStart(2, '0');
+        }
+
+        function parseJalaliInput(raw) {
+            const cleaned = persianToEnglish(String(raw || '')).trim();
+            if (!cleaned) {
+                return null;
+            }
+            const parts = cleaned.split('/');
+            if (parts.length !== 3) {
+                return null;
+            }
+            const jy = parseInt(parts[0], 10);
+            const jm = parseInt(parts[1], 10);
+            const jd = parseInt(parts[2], 10);
+            if (!Number.isFinite(jy) || !Number.isFinite(jm) || !Number.isFinite(jd)) {
+                return null;
+            }
+            if (jm < 1 || jm > 12 || jd < 1 || jd > 31) {
+                return null;
+            }
+            return { jy, jm, jd };
+        }
+
+        function buildGregorianValue(jalaliStr) {
+            const parts = parseJalaliInput(jalaliStr);
+            if (!parts) {
+                return null;
+            }
+            const greg = jalaliToGregorian(parts.jy, parts.jm, parts.jd);
+            const jalaliNormalized = `${parts.jy}/${pad2(parts.jm)}/${pad2(parts.jd)}`;
+            return {
+                jalali: jalaliNormalized,
+                gregorian: greg,
+                ymd: `${greg.year}-${pad2(greg.month)}-${pad2(greg.day)}`,
+                utcMidday: new Date(Date.UTC(greg.year, greg.month - 1, greg.day, 12, 0, 0))
+            };
+        }
+
+        function formatJalaliForPicker(jalaliData) {
+            if (!jalaliData) {
+                return '';
+            }
+            return toPersianDigits(jalaliData.jalali || '');
+        }
+
+        function buildIsoDateTime(gregorian, hour, minute, second) {
+            const safeDate = new Date(Date.UTC(gregorian.year, gregorian.month - 1, gregorian.day, hour, minute, second));
+            const yyyy = safeDate.getUTCFullYear();
+            const mm = pad2(safeDate.getUTCMonth() + 1);
+            const dd = pad2(safeDate.getUTCDate());
+            return `${yyyy}-${mm}-${dd}T${pad2(hour)}:${pad2(minute)}:${pad2(second)}`;
+        }
+
+        function getTehranSafeNow() {
+            const now = new Date();
+            if (typeof Intl === 'undefined' || typeof Intl.DateTimeFormat !== 'function') {
+                return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+            }
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tehran',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).formatToParts(now);
+            const lookup = {};
+            parts.forEach(function(part) {
+                if (part.type !== 'literal') {
+                    lookup[part.type] = part.value;
+                }
+            });
+            const year = parseInt(lookup.year, 10);
+            const month = parseInt(lookup.month, 10);
+            const day = parseInt(lookup.day, 10);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+                return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+            }
+            return new Date(year, month - 1, day, 12, 0, 0);
+        }
+
+        function getTodayJalaliData(baseDate) {
+            if (typeof window.persianDate !== 'function') {
+                return null;
+            }
+            const safeBase = baseDate instanceof Date ? baseDate : new Date();
+            const todayStr = new persianDate(safeBase).format('YYYY/MM/DD');
+            return buildGregorianValue(todayStr);
+        }
+
+        let t10TodayData = null;
+        let t10TodayJalaliPicker = null;
+
         const LOCAL_IRAN_CITIES = [
             "تهران", "مشهد", "اصفهان", "شیراز", "تبریز", "کرج", "قم", "اهواز", "رشت", "کرمانشاه",
             "ارومیه", "زاهدان", "همدان", "یزد", "کرمان", "ساری", "گرگان", "قزوین", "اراک", "سنندج",
@@ -239,6 +334,109 @@
             return String(value).replace(/\d/g, function(digit) {
                 return "۰۱۲۳۴۵۶۷۸۹"[digit];
             });
+        }
+
+        function setInlineError(el, message) {
+            if (!el) {
+                return;
+            }
+            if (message) {
+                el.textContent = message;
+                el.classList.add('is-visible');
+                return;
+            }
+            el.textContent = '';
+            el.classList.remove('is-visible');
+        }
+
+        function syncJalaliToGregorian(inputEl, hiddenEl) {
+            if (!inputEl || !hiddenEl) {
+                return null;
+            }
+            const data = buildGregorianValue(inputEl.value);
+            if (!data) {
+                hiddenEl.value = '';
+                return null;
+            }
+            hiddenEl.value = data.ymd;
+            return data;
+        }
+
+        function updateEndMinDate(startData) {
+            if (!t10TodayData) {
+                return;
+            }
+            const todayMs = t10TodayData.utcMidday.getTime();
+            const startMs = startData ? startData.utcMidday.getTime() : null;
+            const minData = startData && startMs >= todayMs ? startData : t10TodayData;
+            const minValue = formatJalaliForPicker(minData);
+            if (!minValue) {
+                return;
+            }
+            try {
+                $('#end-date').persianDatepicker('option', 'minDate', minValue);
+            } catch (err) {}
+        }
+
+        function validateDateFields(options) {
+            const opts = options || {};
+            const startInput = document.getElementById('start-date');
+            const endInput = document.getElementById('end-date');
+            const startError = document.getElementById('start-date-error');
+            const endError = document.getElementById('end-date-error');
+            const startData = opts.startData || (startInput ? buildGregorianValue(startInput.value) : null);
+            const endData = opts.endData || (endInput ? buildGregorianValue(endInput.value) : null);
+
+            let startMsg = '';
+            let endMsg = '';
+
+            if (opts.showMissing) {
+                if (startInput && !startInput.value) {
+                    startMsg = 'تاریخ شروع را وارد کنید';
+                }
+                if (endInput && !endInput.value) {
+                    endMsg = 'تاریخ پایان را وارد کنید';
+                }
+            }
+
+            if (!startMsg && startInput && startInput.value && !startData) {
+                startMsg = 'تاریخ شروع نامعتبر است';
+            }
+            if (!endMsg && endInput && endInput.value && !endData) {
+                endMsg = 'تاریخ پایان نامعتبر است';
+            }
+
+            if (!startMsg && startData && t10TodayData &&
+                startData.utcMidday.getTime() < t10TodayData.utcMidday.getTime()) {
+                startMsg = 'تاریخ شروع نمی\u200cتواند قبل از امروز باشد';
+            }
+            if (!endMsg && endData && t10TodayData &&
+                endData.utcMidday.getTime() < t10TodayData.utcMidday.getTime()) {
+                endMsg = 'تاریخ پایان نمی\u200cتواند قبل از امروز باشد';
+            }
+            if (!endMsg && startData && endData &&
+                endData.utcMidday.getTime() < startData.utcMidday.getTime()) {
+                endMsg = 'تاریخ پایان نمی\u200cتواند قبل از تاریخ شروع باشد';
+            }
+
+            setInlineError(startError, startMsg);
+            setInlineError(endError, endMsg);
+
+            return { isValid: !(startMsg || endMsg), startData, endData };
+        }
+
+        function syncAndValidateDates(options) {
+            const startInput = document.getElementById('start-date');
+            const endInput = document.getElementById('end-date');
+            const startHidden = document.getElementById('start-date-gregorian');
+            const endHidden = document.getElementById('end-date-gregorian');
+
+            const startData = syncJalaliToGregorian(startInput, startHidden);
+            const endData = syncJalaliToGregorian(endInput, endHidden);
+
+            updateEndMinDate(startData);
+
+            return validateDateFields(Object.assign({}, options, { startData, endData }));
         }
 
         function escapeHtml(raw) {
@@ -592,39 +790,45 @@
         }
 
         $(document).ready(function() {
+            if (window.persianDate && typeof window.persianDate.toCalendar === 'function') {
+                window.persianDate.toCalendar('persian');
+            }
+            if (window.persianDate && typeof window.persianDate.toLocale === 'function') {
+                window.persianDate.toLocale('fa');
+            }
+            if (window.persianDate && typeof window.persianDate.toLeapYearMode === 'function') {
+                window.persianDate.toLeapYearMode('astronomical');
+            }
+
+            const safeNow = getTehranSafeNow();
+            t10TodayData = getTodayJalaliData(safeNow);
+            t10TodayJalaliPicker = formatJalaliForPicker(t10TodayData);
+
             const datePickerOptions = {
                 observer: true,
                 format: 'YYYY/MM/DD',
                 autoClose: true,
                 initialValue: false,
+                initialValueType: 'persian',
+                calendarType: 'persian',
+                calendar: {
+                    persian: { locale: 'fa', leapYearMode: 'astronomical' },
+                    gregorian: { locale: 'en' }
+                },
                 toolbox: {
                     calendarSwitch: { enabled: false }
                 },
                 timePicker: { enabled: false },
-                onSelect: function(unix) {
-                    let jalaliStr = persianToEnglish($(this._targetInput).val());
-                    let parts = jalaliStr.split('/');
-
-                    if (parts.length === 3) {
-                        let jy = parseInt(parts[0]);
-                        let jm = parseInt(parts[1]);
-                        let jd = parseInt(parts[2]);
-
-                        let greg = jalaliToGregorian(jy, jm, jd);
-                        let gDate = greg.year + '-' +
-                                    ('0' + greg.month).slice(-2) + '-' +
-                                    ('0' + greg.day).slice(-2);
-
-                        if (this._targetInput.id === 'start-date') {
-                            $('#start-date-gregorian').val(gDate);
-                        } else if (this._targetInput.id === 'end-date') {
-                            $('#end-date-gregorian').val(gDate);
-                        }
-
-                        console.log('Converted:', jalaliStr, '→', gDate);
-                    }
+                onSelect: function() {
+                    window.requestAnimationFrame(function() {
+                        syncAndValidateDates({ showMissing: false });
+                    });
                 }
             };
+
+            if (t10TodayJalaliPicker) {
+                datePickerOptions.minDate = t10TodayJalaliPicker;
+            }
 
             $('#start-date').persianDatepicker(datePickerOptions);
             $('#end-date').persianDatepicker(datePickerOptions);
@@ -637,16 +841,15 @@
                 $(this).siblings('.t10-jalali-input').focus();
             });
 
-            $('#start-date').on('change', function() {
-                let startVal = $(this).val();
-                if (startVal) {
-                    $('#end-date').persianDatepicker('option', 'minDate', startVal);
-                }
+            $('#start-date, #end-date').on('change', function() {
+                syncAndValidateDates({ showMissing: false });
             });
 
             $('.t10-jalali-input').on('keydown', function(e) {
                 // allow typing
             });
+
+            syncAndValidateDates({ showMissing: false });
 
             initDestinationAutocomplete();
             initTravelersStepper();
@@ -770,7 +973,11 @@
 
             try { $('#start-date').persianDatepicker('setDate', null); } catch (err) {}
             try { $('#end-date').persianDatepicker('setDate', null); } catch (err) {}
-            try { $('#end-date').persianDatepicker('option', 'minDate', null); } catch (err) {}
+            try { $('#start-date').persianDatepicker('option', 'minDate', t10TodayJalaliPicker || null); } catch (err) {}
+            try { $('#end-date').persianDatepicker('option', 'minDate', t10TodayJalaliPicker || null); } catch (err) {}
+
+            setInlineError(document.getElementById('start-date-error'), '');
+            setInlineError(document.getElementById('end-date-error'), '');
 
             if (typeof window.t10SetTravelersCount === 'function') {
                 window.t10SetTravelersCount(DEFAULT_TRAVELERS);
@@ -815,51 +1022,18 @@
 
             data.preferences = formData.getAll('preferences');
 
-            let startGreg = $('#start-date-gregorian').val();
-            let endGreg = $('#end-date-gregorian').val();
-
-            if (!startGreg || !endGreg) {
-                let startJalali = persianToEnglish($('#start-date').val());
-                let endJalali = persianToEnglish($('#end-date').val());
-
-                if (startJalali && endJalali) {
-                    try {
-                        let startParts = startJalali.split('/');
-                        if (startParts.length === 3) {
-                            let startConv = jalaliToGregorian(
-                                parseInt(startParts[0]),
-                                parseInt(startParts[1]),
-                                parseInt(startParts[2])
-                            );
-                            startGreg = `${startConv.year}-${('0' + startConv.month).slice(-2)}-${('0' + startConv.day).slice(-2)}`;
-                        }
-
-                        let endParts = endJalali.split('/');
-                        if (endParts.length === 3) {
-                            let endConv = jalaliToGregorian(
-                                parseInt(endParts[0]),
-                                parseInt(endParts[1]),
-                                parseInt(endParts[2])
-                            );
-                            endGreg = `${endConv.year}-${('0' + endConv.month).slice(-2)}-${('0' + endConv.day).slice(-2)}`;
-                        }
-                    } catch (err) {
-                        console.error('Manual conversion error:', err);
-                    }
-                }
-            }
-
-            if (!startGreg || !endGreg) {
+            const dateCheck = syncAndValidateDates({ showMissing: true });
+            if (!dateCheck.isValid || !dateCheck.startData || !dateCheck.endData) {
                 setResultState(false);
-                resultContent.innerHTML = `<p class="error-message">لطفاً تاریخ‌ها را وارد کنید</p>`;
+                resultContent.innerHTML = `<p class="error-message">لطفاً تاریخ‌ها را اصلاح کنید</p>`;
                 loading.style.display = 'none';
                 resultArea.style.display = 'block';
                 submitBtn.disabled = false;
                 return;
             }
 
-            data.start_date = `${startGreg}T00:00:00`;
-            data.end_date = `${endGreg}T23:59:59`;
+            data.start_date = buildIsoDateTime(dateCheck.startData.gregorian, 12, 0, 0);
+            data.end_date = buildIsoDateTime(dateCheck.endData.gregorian, 23, 59, 59);
             console.log('Final dates:', { start: data.start_date, end: data.end_date });
 
             try {
