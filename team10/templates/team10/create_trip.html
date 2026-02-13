@@ -880,7 +880,7 @@
                     resultContent.innerHTML = `
                         <p class="success-message">سفر با موفقیت ایجاد شد!</p>
                         <p>شناسه سفر: <strong>${result.trip_id || '—'}</strong></p>
-                        <p>وضعیت: ${result.status === 'DRAFT' ? 'پیش‌نویس' : result.status}</p>
+                        <p>وضعیت: ${result.status === 'DRAFT' ? 'پیش‌نویس' : result.status === 'IN_PROGRESS' ? 'در حال اجرا' : result.status}</p>
                         <button class="btn btn-login" onclick="goToTripDetails(${result.trip_id || 'null'})" ${hasTripId ? '' : 'disabled'}>مشاهده برنامه سفر</button>
                         ${hasTripId ? '' : '<p class="error-message">شناسه سفر دریافت نشد</p>'}
                     `;
